@@ -35,19 +35,26 @@ def main():
     print(f"[CLIENT]: Public key sent")
 
     """ Receiving the file data from the server. """
-    # file = open("rec.enc", "w")
-    datafile = client.recv(SIZE).decode(FORMAT)
-    print(f"[RECV] Receiving the file data.")
-    # file.write(data)
+    with open("rec.enc", "wb") as fw:
+        print(f"[RECV] Receiving the file data.")
+        while True:
+            print('receiving')
+            data = client.recv(32)
+            if data == b'BEGIN':
+                continue
+            elif data == b'ENDED':
+                print('Breaking from file write')
+                break
+            else:
+                fw.write(data)
+        fw.close()
+        print("Received..")
     msg = client.recv(SIZE).decode(FORMAT)
     print(f"[CLIENT]: {msg}")
 
     """ Decrypting the file with priv key. """
-    d_file = decrypt(datafile, private)
+    d_file = decrypt("rec.enc", private)
     print(f"[CLIENT]: Recvd File Decrypted {d_file}")
-
-    """ Closing the file. """
-    # file.close()
 
     """ Closing the connection from the server. """
     client.close()

@@ -1,4 +1,5 @@
 import socket
+from traceback import print_tb
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad
 from Crypto.Random import get_random_bytes
@@ -37,20 +38,22 @@ def main():
         pubkey = conn.recv(SIZE).decode(FORMAT)
         print(f"[SERVER]: Public Key Rcvd")
 
-        # """ Opening and reading the file data. """
-        # file = open(filename, "r")
-        # data = file.read()
-
         """ Encrypting the file before sending """
         e_file = encryption(pubkey ,filename)
 
-        """ Sending the file data to the server. """
+        """ Opening and reading the file data & Sending the file data to the server. """
         print(f"[SEND] Sending the file data.")
-        conn.send(e_file.encode(FORMAT))
+        with open(e_file, 'rb') as fs:
+            conn.send(b'BEGIN')
+            while True:
+                data = fs.read(1024)
+                conn.send(data)
+                if not data:
+                    print('Breaking from sending data')
+                    break
+            conn.send(b'ENDED') # I used the same size of the BEGIN token
+            fs.close()
         conn.send("File data received".encode(FORMAT))
-        
-        # """ Closing the file. """
-        # file.close()
 
         """ Closing the connection from the client. """
         conn.close()
@@ -64,7 +67,7 @@ def encryption(pubkey, datafile):
     rsakey = RSA.importKey(pubkey)
     rsacipher = PKCS1_OAEP.new(rsakey)
     e_aeskey = rsacipher.encrypt(aeskey)
-
+    
     with open(datafile , 'rb') as f:
         data = f.read()
 
