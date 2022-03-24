@@ -46,7 +46,7 @@ def main():
         with open(e_file, 'rb') as fs:
             conn.send(b'BEGIN')
             while True:
-                data = fs.read(1024)
+                data = fs.read(SIZE)
                 conn.send(data)
                 if not data:
                     print('Breaking from sending data')

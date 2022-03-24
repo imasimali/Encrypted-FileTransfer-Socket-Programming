@@ -39,7 +39,7 @@ def main():
         print(f"[RECV] Receiving the file data.")
         while True:
             print('receiving')
-            data = client.recv(32)
+            data = client.recv(SIZE)
             if data == b'BEGIN':
                 continue
             elif data == b'ENDED':
