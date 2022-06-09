@@ -1,8 +1,11 @@
+from distutils.command.clean import clean
 import socket
+import os
 from Crypto import Random
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import AES
 from Crypto.Cipher import PKCS1_OAEP
+from Crypto.Random import get_random_bytes
 
 IP = socket.gethostbyname(socket.gethostname())
 PORT = 4455
@@ -34,50 +37,117 @@ def main():
         3 : Login Failed
     '''
     # Receive response 
-    response = client.recv(2048)
-    response = response.decode()
-    print(response)
-
-
-    """ Generating RSA keys """
-    random   = Random.new().read
-    RSAkey   = RSA.generate(2048, random)
-    public   = RSAkey.publickey().exportKey()
-    private  = RSAkey.exportKey()
-
-    """ Sending the input_filename to the server. """
-    client.send(input_filename.encode(FORMAT))
-    msg = client.recv(SIZE).decode(FORMAT)
+    msg = client.recv(2048).decode(FORMAT)
     print(f"[SERVER]: {msg}")
 
-    """ Sending Public Key to server """
-    client.send(public)
-    print(f"[CLIENT]: Public key sent")
+    if msg == "Login Failed":
+        client.close()
+        return
 
-    """ Receiving the file data from the server. """
-    with open("rec.enc", "wb") as fw:
-        print(f"[RECV] Receiving the file data.")
-        while True:
-            print('Receiving data')
-            data = client.recv(SIZE)
-            if data == b'BEGIN':
-                continue
-            elif data == b'ENDED':
-                print('Breaking from file write')
-                break
-            else:
-                fw.write(data)
-        fw.close()
-        print("Received..")
-    msg = client.recv(SIZE).decode(FORMAT)
-    print(f"[CLIENT]: {msg}")
+    """ Choice to upload or download """
+    print(''' Press Key : Operation performed :
+        1 : Download File 
+        2 : Upload File
+        3 : Exit
+    ''')
+    choice = input("OPTION: ")
+    client.send(choice.encode(FORMAT))
 
-    """ Decrypting the file with priv key. """
-    d_file = decrypt("rec.enc", private)
-    print(f"[CLIENT]: Recvd File Decrypted {d_file}")
+    if choice == "1":
+        """ Generating RSA keys """
+        random   = Random.new().read
+        RSAkey   = RSA.generate(2048, random)
+        public   = RSAkey.publickey().exportKey()
+        private  = RSAkey.exportKey()
 
-    """ Closing the connection from the server. """
-    client.close()
+        """ Sending the input_filename to the server. """
+        client.send(input_filename.encode(FORMAT))
+        msg = client.recv(SIZE).decode(FORMAT)
+        print(f"[SERVER]: {msg}")
+
+        """ Sending Public Key to server """
+        client.send(public)
+        print(f"[CLIENT]: Public key sent")
+
+        """ Receiving the file data from the server. """
+        with open("rec.enc", "wb") as fw:
+            print(f"[RECV] Receiving the file data.")
+            while True:
+                print('Receiving data')
+                data = client.recv(SIZE)
+                if data == b'BEGIN':
+                    continue
+                elif data == b'ENDED':
+                    print('Breaking from file write')
+                    break
+                else:
+                    fw.write(data)
+            fw.close()
+            print("Received..")
+        msg = client.recv(SIZE).decode(FORMAT)
+        print(f"[CLIENT]: {msg}")
+
+        """ Decrypting the file with priv key. """
+        d_file = decrypt("rec.enc", private)
+        print(f"[CLIENT]: Recvd File Decrypted {d_file}")
+
+        """ Deleting enc files """
+        os.remove("rec.enc")
+
+    if choice == "2":
+        """ Sending the output_filename to the server. """
+        client.send(output_filename.encode(FORMAT))
+        msg = client.recv(SIZE).decode(FORMAT)
+        print(f"[CLIENT]: {msg}")
+
+        """ Reciving Public key from server """
+        pubkey = client.recv(SIZE).decode(FORMAT)
+        print(f"[CLIENT]: Public Key Rcvd")
+
+        """ Encrypting the file before sending """
+        e_file = encryption(pubkey ,output_filename)
+
+        """ Opening and reading the file data & Sending the file data to the server. """
+        print(f"[SEND] Sending the file data.")
+        with open(e_file, 'rb') as fs:
+            client.send(b'BEGIN')
+            while True:
+                data = fs.read(SIZE)
+                client.send(data)
+                if not data:
+                    print('Breaking from sending data')
+                    break
+            client.send(b'ENDED') # I used the same size of the BEGIN token
+            fs.close()
+        client.send("File data received".encode(FORMAT))
+
+        """ Deleting enc files """
+        os.remove("bundle.enc")
+
+    else:
+        """ Closing the connection from the server. """
+        client.close()
+
+def encryption(pubkey, datafile):
+    aeskey = get_random_bytes(16)
+
+    rsakey = RSA.importKey(pubkey)
+    rsacipher = PKCS1_OAEP.new(rsakey)
+    e_aeskey = rsacipher.encrypt(aeskey)
+    
+    with open(datafile , 'rb') as f:
+        data = f.read()
+
+    aescipher = AES.new(aeskey, AES.MODE_EAX)
+    e_data , tag = aescipher.encrypt_and_digest(data)
+
+    with open('bundle.enc' , 'wb') as f:
+        f.write(e_aeskey)
+        f.write(aescipher.nonce)
+        f.write(tag)
+        f.write(e_data)
+
+    return 'bundle.enc'
 
 def decrypt(datafile, priv):
 
