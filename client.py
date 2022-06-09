@@ -9,8 +9,8 @@ PORT = 4455
 ADDR = (IP, PORT)
 FORMAT = "utf-8"
 SIZE = 1024
-input_filename = "input.txt"
-output_filename = "output.txt"
+input_filename = "hawk.png"
+output_filename = "output.png"
 
 def main():
     """ Staring a TCP socket. """
@@ -18,6 +18,26 @@ def main():
 
     """ Connecting to the server. """
     client.connect(ADDR)
+
+    """ Authenticating with client """
+    response = client.recv(2048)
+    # Input UserName
+    name = input(response.decode())	
+    client.send(str.encode(name))
+    response = client.recv(2048)
+    # Input Password
+    password = input(response.decode())	
+    client.send(str.encode(password))
+    ''' Response : Status of Connection :
+        1 : Registeration successful 
+        2 : Connection Successful
+        3 : Login Failed
+    '''
+    # Receive response 
+    response = client.recv(2048)
+    response = response.decode()
+    print(response)
+
 
     """ Generating RSA keys """
     random   = Random.new().read
@@ -38,7 +58,7 @@ def main():
     with open("rec.enc", "wb") as fw:
         print(f"[RECV] Receiving the file data.")
         while True:
-            print('receiving')
+            print('Receiving data')
             data = client.recv(SIZE)
             if data == b'BEGIN':
                 continue
